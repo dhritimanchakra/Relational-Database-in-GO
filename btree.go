@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/binary"
 )
 
@@ -95,4 +96,52 @@ func nodeAppendKV(new BNode, idx uint16, ptr uint64, key []byte, val []byte) {
 
 func (node BNode) nbytes() uint16 {
 	return node.kvPos(node.nkeys())
+}
+
+func nodeAppendRange(
+	new BNode, old BNode, dstNew uint16, srcOld uint16, n uint16,
+
+) {
+	for i := uint16(0); i < n; i++ {
+		dst, src := dstNew+i, srcOld+i
+		nodeAppendKV(new, dst, old.getPtr(src), old.getKey(src), old.getVal(src))
+	}
+}
+
+func leafInsert(
+	new BNode, old BNode, idx uint16, key []byte, val []byte,
+) {
+	new.setHeader(BNODE_LEAF, old.nkeys()+1)
+	nodeAppendRange(new, old, 0, 0, idx)
+	nodeAppendKV(new, idx, 0, key, val)
+	nodeAppendRange(new, old, idx+1, idx, old.nkeys()-idx)
+}
+
+func leafUpdate(
+	new BNode, old BNode, idx uint16, key []byte, val []byte,
+) {
+	new.setHeader(BNODE_LEAF, old.nkeys())
+	nodeAppendRange(new, old, 0, 0, idx)
+	nodeAppendKV(new, idx, 0, key, val)
+	nodeAppendRange(new, old, idx+1, idx+1, old.nkeys()-(idx+1))
+}
+func nodeLookupLE(node BNode, key []byte) uint16 {
+	nkeys := node.nkeys()
+	var i uint16
+	for i = 0; i < nkeys; i++ {
+		cmp := bytes.Compare(node.getKey(i), key)
+		if cmp == 0 {
+			return i
+		}
+		if cmp > 0 {
+			return i - 1
+		}
+	}
+	return i - 1
+}
+
+func nodeSplit2(left BNode, right BNode, old BNode) {
+	assert(old.nkeys() >= 2)
+	nleft := old.nkeys() / 2
+	left_bytes := func()
 }
