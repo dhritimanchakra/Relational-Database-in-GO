@@ -8,8 +8,6 @@ import (
 	"path"
 	"syscall"
 	"unsafe"
-
-	"golang.org/x/sys/unix"
 )
 
 const (
@@ -604,16 +602,4 @@ func max(a, b int) int {
 		return a
 	}
 	return b
-}
-
-func main() {
-	c := newC()
-	c.add("hello", "world")
-	c.add("foo", "bar")
-	c.add("apple", "juice")
-	val, ok := c.tree.Get([]byte("hello"))
-	fmt.Printf("get hello: %s, found: %v\n", val, ok)
-	c.del("foo")
-	_, ok = c.tree.Get([]byte("foo"))
-	fmt.Printf("get foo after delete, found: %v\n", ok)
 }

@@ -1,6 +1,5 @@
 package main
 
-
 import (
 	"fmt"
 	"strconv"
@@ -28,7 +27,7 @@ type CreateStmt struct {
 }
 type InsertStmt struct {
 	table string
-	vals []string
+	vals  []string
 }
 type SelectStmt struct {
 	table string
@@ -71,22 +70,21 @@ func (p *Parser) peek() Token {
 	return p.tokens[p.pos]
 }
 
-func (p *Parser) consume() Token{
-	tok:=p.peek()
+func (p *Parser) consume() Token {
+	tok := p.peek()
 	p.pos++
 	return tok
 }
-func (p *Parser) expect(typ TokenType) Token{
-	tok:=p.consume()
-	if tok.typ!=typ{
-			panic(fmt.Sprintf("expected token %d got %d (%q)", typ, tok.typ, tok.val))
+func (p *Parser) expect(typ TokenType) Token {
+	tok := p.consume()
+	if tok.typ != typ {
+		panic(fmt.Sprintf("expected token %d got %d (%q)", typ, tok.typ, tok.val))
 	}
 	return tok
-
 }
 
-func (p *Parser) parse() Statement{
-	tok:=p.peek()
+func (p *Parser) parse() Statement {
+	tok := p.peek()
 	switch tok.typ {
 	case TK_CREATE:
 		return p.parseCreate()
@@ -100,20 +98,19 @@ func (p *Parser) parse() Statement{
 		return p.parseUpdate()
 	}
 	panic(fmt.Sprintf("unexpected token: %q", tok.val))
-
 }
 
-func (p *Parser) parseCreate() *CreateStmt{
+func (p *Parser) parseCreate() *CreateStmt {
 	p.expect(TK_CREATE)
 	p.expect(TK_TABLE)
-	name:=p.expect(TK_IDENT)
+	name := p.expect(TK_IDENT)
 	p.expect(TK_LPAREN)
 	var cols []Column
-	for p.peek().typ!=TK_RPAREN{
-		colName:=p.expect(TK_IDENT)
-		colTok:=p.consume()
+	for p.peek().typ != TK_RPAREN {
+		colName := p.expect(TK_IDENT)
+		colTok := p.consume()
 		var ct ColType
-				switch colTok.typ {
+		switch colTok.typ {
 		case TK_INT:
 			ct = COL_INT
 		case TK_TEXT:
@@ -125,12 +122,11 @@ func (p *Parser) parseCreate() *CreateStmt{
 		if p.peek().typ == TK_COMMA {
 			p.consume()
 		}
-
-	}	
+	}
 	p.expect(TK_RPAREN)
 	return &CreateStmt{table: name.val, cols: cols}
-
 }
+
 func (p *Parser) parseInsert() *InsertStmt {
 	p.expect(TK_INSERT)
 	p.expect(TK_INTO)
@@ -152,31 +148,30 @@ func (p *Parser) parseInsert() *InsertStmt {
 	return &InsertStmt{table: name.val, vals: vals}
 }
 
-
-func (p *Parser) parseSelect() *SelectStmt{
+func (p *Parser) parseSelect() *SelectStmt {
 	p.expect(TK_SELECT)
 	var cols []string
-	if p.peek(),typ==TK_STAR{
+	if p.peek().typ == TK_STAR {
 		p.consume()
-		cols=[]string{"*"}
-	}else{
-		for{
-			col:=p.expect(TK_IDENT)
-			cols=append(cols,cols.val)
-			if p.peek().typ!=TK_COMMA{
+		cols = []string{"*"}
+	} else {
+		for {
+			col := p.expect(TK_IDENT)
+			cols = append(cols, col.val)
+			if p.peek().typ != TK_COMMA {
 				break
 			}
 			p.consume()
 		}
 	}
 	p.expect(TK_FROM)
-	name:=p.expect(TK_IDENT)
+	name := p.expect(TK_IDENT)
 	var where *Expr
-	if p.peek().typ==TK_WHERE{
+	if p.peek().typ == TK_WHERE {
 		p.consume()
-		where=p.parseExpr()
+		where = p.parseExpr()
 	}
-	return &SelectStmt{table:name,cols:cols,where:where}
+	return &SelectStmt{table: name.val, cols: cols, where: where}
 }
 
 func (p *Parser) parseDelete() *DeleteStmt {
@@ -190,7 +185,7 @@ func (p *Parser) parseDelete() *DeleteStmt {
 	}
 	return &DeleteStmt{table: name.val, where: where}
 }
- 
+
 func (p *Parser) parseUpdate() *UpdateStmt {
 	p.expect(TK_UPDATE)
 	name := p.expect(TK_IDENT)
@@ -216,6 +211,7 @@ func (p *Parser) parseUpdate() *UpdateStmt {
 	}
 	return &UpdateStmt{table: name.val, assignments: assignments, where: where}
 }
+
 func (p *Parser) parseExpr() *Expr {
 	col := p.expect(TK_IDENT)
 	op := p.consume()
@@ -228,7 +224,7 @@ func (p *Parser) parseExpr() *Expr {
 	}
 	return &Expr{col: col.val, op: op.typ, val: val.val}
 }
- 
+
 func evalExpr(expr *Expr, row map[string]string) bool {
 	rowVal, ok := row[expr.col]
 	if !ok {
@@ -252,7 +248,6 @@ func evalExpr(expr *Expr, row map[string]string) bool {
 	}
 	return false
 }
- 
 
 func toInt(s string) (int64, bool) {
 	n, err := strconv.ParseInt(s, 10, 64)
