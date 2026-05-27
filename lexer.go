@@ -1,6 +1,9 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 type TokenType int
 
@@ -108,12 +111,54 @@ func (l *Lexer) nextToken() Token {
 	panic(fmt.Sprintf("unexpected character: %c", ch))
 }
 
+func (l *Lexer) tokenize() []Token {
+	var tokens []Token
+	for {
+		tok := l.nextToken()
+		tokens = append(tokens, tok)
+		if tok.typ == TK_EOF {
+			break
+		}
 
-func (l*Lexer) tokenize()[]Token{
-	var tokens[] Token
-	for{
-		tok:=l.nextToken()
-		tokens=append(tokens,tok)
-		if 
 	}
+	return tokens
+}
+
+func isLetter(ch rune) bool {
+	return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '_'
+}
+
+func keywordOrIdent(word string) TokenType {
+	switch strings.ToUpper(word) {
+	case "SELECT":
+		return TK_SELECT
+	case "INSERT":
+		return TK_INSERT
+	case "DELETE":
+		return TK_DELETE
+	case "UPDATE":
+		return TK_UPDATE
+	case "CREATE":
+		return TK_CREATE
+	case "TABLE":
+		return TK_TABLE
+	case "INTO":
+		return TK_INTO
+	case "VALUES":
+		return TK_VALUES
+	case "FROM":
+		return TK_FROM
+	case "WHERE":
+		return TK_WHERE
+	case "SET":
+		return TK_SET
+	case "AND":
+		return TK_AND
+	case "INT":
+		return TK_INT
+	case "TEXT":
+		return TK_TEXT
+	}
+	return TK_IDENT
+
 }
