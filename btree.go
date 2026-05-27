@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"os"
+	"path"
+	"syscall"
 	"unsafe"
 )
 
@@ -364,4 +367,47 @@ func newC() *C {
 func (c *C) add(key string, val string) {
 	c.tree.Insert([]byte(key), []byte(val))
 	c.ref[key] = val
+}
+
+type KV struct {
+	Path string
+	fd   int
+	tree BTree
+}
+
+func (db *KV) Get(key []byte) ([]byte, bool) {
+	return db.tree.Get(key)
+}
+func (db *KV) Open() error
+
+func (db *KV) Set(key []byte, val []byte) error {
+	db.tree.Insert(key, val)
+	return updateFile(db)
+}
+func (db *KV) Del(key []byte) (bool, error) {
+	deleted := db.tree.Delete(key)
+	return deleted, updateFile(db)
+}
+
+func updateFile(db *KV) error {
+	if err := writePages(db); err != nil {
+		return err
+	}
+	if err := syscall.Fsync(db.fd); err != nil {
+		return err
+	}
+	if err := updateRoot(db); err != nil {
+		return err
+	}
+	return syscall.Fsync(db.fd)
+
+}
+
+func createFileSync(file string) (int, error) {
+	flags := os.O_RDONLY | syscall.O_DIRECTORY
+	dirfd, err := syscall.Open(path.Dir(file), flags, 0o644)
+	if err != nil {
+		return -1, fmt.Errorf("open directory: %w", err)
+	}
+	defer syscall.Close(dirfd)
 }
