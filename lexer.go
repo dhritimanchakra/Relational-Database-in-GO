@@ -8,31 +8,40 @@ import (
 type TokenType int
 
 const (
-	TK_SELECT TokenType = iota
-	TK_INSERT
-	TK_DELETE
-	TK_UPDATE
-	TK_CREATE
-	TK_TABLE
-	TK_INTO
-	TK_VALUES
-	TK_FROM
-	TK_WHERE
-	TK_SET
-	TK_AND
-	TK_INT
-	TK_TEXT
-	TK_STAR
-	TK_COMMA
-	TK_LPAREN
-	TK_RPAREN
-	TK_EQ
-	TK_GT
-	TK_LT
+	TK_EOF TokenType = iota
 	TK_IDENT
 	TK_NUMBER
 	TK_STRING
-	TK_EOF
+
+	// keywords
+	TK_CREATE
+	TK_TABLE
+	TK_INSERT
+	TK_INTO
+	TK_VALUES
+	TK_SELECT
+	TK_FROM
+	TK_WHERE
+	TK_AND
+	TK_DELETE
+	TK_UPDATE
+	TK_SET
+	TK_BEGIN
+	TK_COMMIT
+	TK_ROLLBACK
+
+	// symbols
+	TK_LPAREN
+	TK_RPAREN
+	TK_COMMA
+	TK_STAR
+	TK_SEMI
+	TK_EQ // =
+	TK_NE // != or <>
+	TK_LT // <
+	TK_LE // <=
+	TK_GT // >
+	TK_GE // >=
 )
 
 type Token struct {
@@ -40,125 +49,169 @@ type Token struct {
 	val string
 }
 
+var keywords = map[string]TokenType{
+	"create": TK_CREATE, "table": TK_TABLE, "insert": TK_INSERT, "into": TK_INTO,
+	"values": TK_VALUES, "select": TK_SELECT, "from": TK_FROM, "where": TK_WHERE,
+	"and": TK_AND, "delete": TK_DELETE, "update": TK_UPDATE, "set": TK_SET,
+	"begin": TK_BEGIN, "commit": TK_COMMIT, "rollback": TK_ROLLBACK,
+}
+
+const maxKeywordLen = 8 // "rollback"
+
 type Lexer struct {
-	input []rune
-	pos   int
+	in  string
+	pos int
 }
 
-func newLexer(input string) *Lexer {
-	return &Lexer{input: []rune(input), pos: 0}
-}
+func newLexer(input string) *Lexer { return &Lexer{in: input} }
 
-func (l *Lexer) skipWhitespace() {
-	for l.pos < len(l.input) && (l.input[l.pos] == ' ' || l.input[l.pos] == '\t' || l.input[l.pos] == '\n') {
-		l.pos++
-	}
-}
-
-func (l *Lexer) nextToken() Token {
-	l.skipWhitespace()
-	if l.pos >= len(l.input) {
-		return Token{TK_EOF, ""}
-	}
-	ch := l.input[l.pos]
-	switch ch {
-	case '*':
-		l.pos++
-		return Token{TK_STAR, "*"}
-	case ',':
-		l.pos++
-		return Token{TK_COMMA, ","}
-	case '(':
-		l.pos++
-		return Token{TK_LPAREN, "("}
-	case ')':
-		l.pos++
-		return Token{TK_RPAREN, ")"}
-	case '=':
-		l.pos++
-		return Token{TK_EQ, "="}
-	case '>':
-		l.pos++
-		return Token{TK_GT, ">"}
-	case '<':
-		l.pos++
-		return Token{TK_LT, "<"}
-	case '"':
-		l.pos++
-		start := l.pos
-		for l.pos < len(l.input) && l.input[l.pos] != '"' {
-			l.pos++
-		}
-		s := string(l.input[start:l.pos])
-		l.pos++
-		return Token{TK_STRING, s}
-	}
-	if ch >= '0' && ch <= '9' {
-		start := l.pos
-		for l.pos < len(l.input) && l.input[l.pos] >= '0' && l.input[l.pos] <= '9' {
-			l.pos++
-		}
-		return Token{TK_NUMBER, string(l.input[start:l.pos])}
-	}
-	if isLetter(ch) {
-		start := l.pos
-		for l.pos < len(l.input) && (isLetter(l.input[l.pos]) || (l.input[l.pos] >= '0' && l.input[l.pos] <= '9') || l.input[l.pos] == '_') {
-			l.pos++
-		}
-		word := string(l.input[start:l.pos])
-		return Token{keywordOrIdent(word), word}
-	}
-	panic(fmt.Sprintf("unexpected character: %c", ch))
-}
-
-func (l *Lexer) tokenize() []Token {
-	var tokens []Token
+func (l *Lexer) tokenize() ([]Token, error) {
+	toks := make([]Token, 0, len(l.in)/3+2)
 	for {
-		tok := l.nextToken()
-		tokens = append(tokens, tok)
-		if tok.typ == TK_EOF {
-			break
+		tok, err := l.next()
+		if err != nil {
+			return nil, err
 		}
-
+		toks = append(toks, tok)
+		if tok.typ == TK_EOF {
+			return toks, nil
+		}
 	}
-	return tokens
 }
 
-func isLetter(ch rune) bool {
-	return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '_'
+func isSpace(c byte) bool      { return c == ' ' || c == '\t' || c == '\n' || c == '\r' }
+func isDigit(c byte) bool      { return c >= '0' && c <= '9' }
+func isIdentStart(c byte) bool { return c == '_' || (c|0x20 >= 'a' && c|0x20 <= 'z') }
+func isIdentPart(c byte) bool  { return isIdentStart(c) || isDigit(c) }
+
+func (l *Lexer) next() (Token, error) {
+	in := l.in
+	for l.pos < len(in) && isSpace(in[l.pos]) {
+		l.pos++
+	}
+	if l.pos >= len(in) {
+		return Token{TK_EOF, ""}, nil
+	}
+	start := l.pos
+	c := in[start]
+
+	switch {
+	case isIdentStart(c):
+		for l.pos < len(in) && isIdentPart(in[l.pos]) {
+			l.pos++
+		}
+		word := in[start:l.pos]
+		if t, ok := lookupKeyword(word); ok {
+			return Token{t, word}, nil
+		}
+		return Token{TK_IDENT, lowerASCII(word)}, nil // identifiers are case-insensitive
+
+	case isDigit(c) || (c == '-' && start+1 < len(in) && isDigit(in[start+1])):
+		l.pos++
+		for l.pos < len(in) && isDigit(in[l.pos]) {
+			l.pos++
+		}
+		return Token{TK_NUMBER, in[start:l.pos]}, nil
+
+	case c == '\'':
+		return l.lexString()
+	}
+
+	l.pos++
+	peek := byte(0)
+	if l.pos < len(in) {
+		peek = in[l.pos]
+	}
+	switch c {
+	case '(':
+		return Token{TK_LPAREN, "("}, nil
+	case ')':
+		return Token{TK_RPAREN, ")"}, nil
+	case ',':
+		return Token{TK_COMMA, ","}, nil
+	case '*':
+		return Token{TK_STAR, "*"}, nil
+	case ';':
+		return Token{TK_SEMI, ";"}, nil
+	case '=':
+		return Token{TK_EQ, "="}, nil
+	case '<':
+		if peek == '=' {
+			l.pos++
+			return Token{TK_LE, "<="}, nil
+		}
+		if peek == '>' {
+			l.pos++
+			return Token{TK_NE, "<>"}, nil
+		}
+		return Token{TK_LT, "<"}, nil
+	case '>':
+		if peek == '=' {
+			l.pos++
+			return Token{TK_GE, ">="}, nil
+		}
+		return Token{TK_GT, ">"}, nil
+	case '!':
+		if peek == '=' {
+			l.pos++
+			return Token{TK_NE, "!="}, nil
+		}
+	}
+	return Token{}, fmt.Errorf("unexpected character %q at position %d", c, start)
 }
 
-func keywordOrIdent(word string) TokenType {
-	switch strings.ToUpper(word) {
-	case "SELECT":
-		return TK_SELECT
-	case "INSERT":
-		return TK_INSERT
-	case "DELETE":
-		return TK_DELETE
-	case "UPDATE":
-		return TK_UPDATE
-	case "CREATE":
-		return TK_CREATE
-	case "TABLE":
-		return TK_TABLE
-	case "INTO":
-		return TK_INTO
-	case "VALUES":
-		return TK_VALUES
-	case "FROM":
-		return TK_FROM
-	case "WHERE":
-		return TK_WHERE
-	case "SET":
-		return TK_SET
-	case "AND":
-		return TK_AND
-	case "INT":
-		return TK_INT
-	case "TEXT":
-		return TK_TEXT
+func (l *Lexer) lexString() (Token, error) {
+	in := l.in
+	start := l.pos
+	l.pos++
+	seg := l.pos
+	var buf []byte
+	escaped := false
+	for l.pos < len(in) {
+		if in[l.pos] == '\'' {
+			if l.pos+1 < len(in) && in[l.pos+1] == '\'' {
+				buf = append(buf, in[seg:l.pos+1]...)
+				escaped = true
+				l.pos += 2
+				seg = l.pos
+				continue
+			}
+			var s string
+			if escaped {
+				buf = append(buf, in[seg:l.pos]...)
+				s = string(buf)
+			} else {
+				s = in[seg:l.pos]
+			}
+			l.pos++ // closing quote
+			return Token{TK_STRING, s}, nil
+		}
+		l.pos++
 	}
-	return TK_IDENT
+	return Token{}, fmt.Errorf("unterminated string starting at position %d", start)
+}
 
+func lookupKeyword(word string) (TokenType, bool) {
+	if len(word) > maxKeywordLen {
+		return 0, false
+	}
+	var buf [maxKeywordLen]byte
+	for i := 0; i < len(word); i++ {
+		b := word[i]
+		if b >= 'A' && b <= 'Z' {
+			b += 'a' - 'A'
+		}
+		buf[i] = b
+	}
+	t, ok := keywords[string(buf[:len(word)])]
+	return t, ok
+}
+
+func lowerASCII(s string) string {
+	for i := 0; i < len(s); i++ {
+		if s[i] >= 'A' && s[i] <= 'Z' {
+			return strings.ToLower(s)
+		}
+	}
+	return s
 }

@@ -1,3 +1,3 @@
-module godb
+module github.com/dhritimanchakra/Relational-Database-in-GO
 
-go 1.26.2
+go 1.21
